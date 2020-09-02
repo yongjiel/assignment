@@ -1,0 +1,69 @@
+version: "3"
+
+services:
+  redis:
+    container_name: a_redis
+    image: redis
+    ports:
+      - "6389:${REDIS_PORT}"
+    volumes:
+      - "./redis_data:/data"
+    entrypoint: redis-server --appendonly yes
+    restart: always
+
+  db:
+    container_name: a_db
+    build:
+      context: ./db
+    image: a_mysql
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    ports:
+      - "3316:3306"
+    volumes:
+      - "./mysql_data:/var/lib/mysql"
+
+  fweb:
+    container_name: flask_web
+    build:
+      context: ./fweb
+    image: flask_web:latest
+    environment:
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - QUEUE_KEY=${QUEUE_KEY}
+    depends_on:
+      - redis
+    links:
+      - redis:${REDIS_HOST}
+    ports:
+      - "5000:5000"
+
+  web:
+    container_name: springboot
+    build:
+      context: ./web
+    image: springboot:latest
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - QUEUE_KEY=${QUEUE_KEY}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - DATABASE_HOST=jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?useUnicode=true
+    depends_on:
+      - redis
+      - db
+    links:
+      - db:${MYSQL_HOST}
+      - redis:${REDIS_HOST}
+    ports:
+      - "8080:8080"
